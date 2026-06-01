@@ -13,7 +13,13 @@ import (
 var (
 	outputJSON bool
 	noGit      bool
+	version    = "dev"
 )
+
+// SetVersion sets the version string (called from main)
+func SetVersion(v string) {
+	version = v
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "scodecounter [path]",
@@ -32,6 +38,7 @@ func Execute() {
 func init() {
 	rootCmd.Flags().BoolVarP(&outputJSON, "json", "j", false, "Output as JSON")
 	rootCmd.Flags().BoolVar(&noGit, "no-git", false, "Skip git statistics")
+	rootCmd.Version = version
 }
 
 func runScan(cmd *cobra.Command, args []string) error {

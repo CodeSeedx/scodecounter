@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG.md
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          # 从 CHANGELOG.md 中提取当前版本的说明
+          # 提取从 "## [VERSION]" 到下一个 "## [" 之间的内容
+          NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            echo "body=未找到 ${VERSION} 的更新说明，请查看 CHANGELOG.md" >> "$GITHUB_OUTPUT"
+          else
+            # 写入临时文件避免多行字符串问题
+            echo "$NOTES" > /tmp/release_body.md
+            echo "file=/tmp/release_body.md" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Linux (amd64)
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
+            -o scodecounter-${{ steps.version.outputs.VERSION }}-linux-amd64 .
+
+      - name: Build Linux (arm64)
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
+            -o scodecounter-${{ steps.version.outputs.VERSION }}-linux-arm64 .
+
+      - name: Build macOS (amd64)
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
+            -o scodecounter-${{ steps.version.outputs.VERSION }}-darwin-amd64 .
+
+      - name: Build macOS (arm64)
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
+            -o scodecounter-${{ steps.version.outputs.VERSION }}-darwin-arm64 .
+
+      - name: Build Windows (amd64)
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
+            -o scodecounter-${{ steps.version.outputs.VERSION }}-windows-amd64.exe .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.version.outputs.VERSION }}
+          body_path: ${{ steps.changelog.outputs.file }}
+          files: |
+            scodecounter-${{ steps.version.outputs.VERSION }}-linux-amd64
+            scodecounter-${{ steps.version.outputs.VERSION }}-linux-arm64
+            scodecounter-${{ steps.version.outputs.VERSION }}-darwin-amd64
+            scodecounter-${{ steps.version.outputs.VERSION }}-darwin-arm64
+            scodecounter-${{ steps.version.outputs.VERSION }}-windows-amd64.exe
